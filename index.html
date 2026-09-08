@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ポケモンカードBOX買取表メーカー</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+  :root{
+    --bg:#0E1B33; --panel:#14264A; --gold:#FFC53D; --red:#FF4D4D;
+    --ink:#F7F4EC; --muted:#8FA3C4; --line:#2A3E68;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:#060C18; color:var(--ink);
+    font-family:"Noto Sans JP",sans-serif;
+    display:flex; flex-direction:column; align-items:center; gap:18px; padding:24px 16px 60px;}
+
+  /* ===== 操作パネル(画像には写らない) ===== */
+  .panel{width:100%; max-width:1080px; background:#0F1B30; border:1px solid var(--line);
+    border-radius:14px; padding:16px 18px; display:flex; flex-direction:column; gap:12px;}
+  .line{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .panel input[type=text]{flex:1; min-width:120px; background:#0B1425; color:var(--ink);
+    border:1px solid var(--line); border-radius:8px; padding:9px 11px; font-family:inherit; font-size:13px;}
+  .btn{border:0; border-radius:8px; padding:10px 16px; font-family:inherit; font-weight:700;
+    font-size:14px; cursor:pointer; white-space:nowrap}
+  .btn-main{background:var(--gold); color:#20160A}
+  .btn-sub{background:#24365E; color:var(--ink)}
+  .btn:active{transform:translateY(1px)}
+  .status{font-size:13px; color:var(--muted)}
+  .status.err{color:var(--red)}
+  label.chk{display:flex; align-items:center; gap:6px; font-size:13px; color:var(--muted); cursor:pointer}
+
+  /* ===== 検索結果 ===== */
+  #results{width:100%; max-width:1080px; display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:10px}
+  #results:empty{display:none}
+  .rcard{background:#0F1B30; border:1px solid var(--line); border-radius:10px; padding:10px;
+    display:flex; flex-direction:column; gap:7px}
+  .rcard img{width:100%; height:100px; object-fit:contain; background:#0E1B33; border-radius:6px}
+  .rname{font-size:12px; line-height:1.3; height:3.1em; overflow:hidden; color:var(--ink)}
+  .rprice{font-size:14px; color:var(--gold); font-weight:700}
+  .rmin{font-size:11px; color:var(--muted); font-weight:400}
+  .rbtns{display:flex; gap:6px; margin-top:auto}
+  .rbtns .btn{flex:1; padding:8px 0; font-size:12px}
+
+  /* ===== 買取表(この#boardが画像になる) ===== */
+  #board{width:1080px; background:var(--bg); padding:56px 56px 44px;
+    background-image:linear-gradient(180deg,#13223F 0%, #0E1B33 55%)}
+  .head{display:flex; align-items:flex-end; justify-content:space-between; gap:24px;
+    padding-bottom:22px; border-bottom:3px solid var(--gold)}
+  .head-l{display:flex; flex-direction:column; gap:10px}
+  .tag{align-self:flex-start; background:var(--red); color:#fff; font-weight:900; font-size:22px;
+    letter-spacing:2px; padding:5px 14px; border-radius:6px; transform:rotate(-1.5deg)}
+  .title{font-weight:900; font-size:60px; line-height:1.02; margin:0}
+  .shop{font-weight:700; font-size:26px}
+  .head-r{text-align:right; display:flex; flex-direction:column; gap:6px; align-items:flex-end}
+  .date{font-weight:700; font-size:22px; color:var(--gold)}
+
+  .rows{margin-top:10px}
+  .item{display:flex; align-items:center; gap:22px; padding:14px 8px;
+    border-bottom:1px solid var(--line); position:relative}
+  .item:nth-child(odd){background:rgba(255,255,255,.025)}
+  .thumb{width:92px; height:92px; object-fit:contain; flex:none; background:#0B1425; border-radius:8px}
+  .thumb.noimg{background:#0B1425}
+  .name{flex:1; font-weight:700; font-size:34px; min-width:0; outline:none}
+  .name:focus,.price:focus,.ce:focus{background:rgba(255,197,61,.12); border-radius:6px}
+  .price{font-weight:900; font-size:52px; color:var(--gold); white-space:nowrap; outline:none}
+  .price .yen{font-size:32px; margin-right:2px; vertical-align:2px}
+  .item.bad .price{color:var(--red); font-size:28px; font-weight:700}
+  .rm{position:absolute; left:-40px; top:50%; transform:translateY(-50%);
+    width:28px; height:28px; border-radius:50%; border:0; background:#3a2030; color:var(--red);
+    font-size:18px; line-height:1; cursor:pointer}
+  .foot{display:flex; justify-content:space-between; align-items:center; margin-top:22px; gap:20px}
+  .note{font-size:19px; font-weight:700; outline:none}
+  .handle{font-size:20px; color:var(--muted); font-weight:700; outline:none}
+  body.exporting .rm{display:none}
+  .empty{padding:56px 8px; text-align:center; color:var(--muted); font-size:22px}
+</style>
+</head>
+<body>
+
+  <div class="panel">
+    <div class="line">
+      <input id="api" type="text" placeholder="GASウェブアプリのURL (.../exec)"
+        value="https://script.google.com/macros/s/AKfycbxy_D2iGSW9l68geziP9W8YRy2XsJlECJ79KbuW59RixFKzxzdasY7CMOQWIQH-jgrS3Q/exec">
+      <button class="btn btn-sub" onclick="load()">シートから読み込み</button>
+    </div>
+    <div class="line">
+      <input id="q" type="text" placeholder="商品名で検索（例: ポケモンカード box）" onkeydown="if(event.key==='Enter')doSearch()">
+      <button class="btn btn-sub" onclick="doSearch()">検索</button>
+    </div>
+    <div class="line">
+      <label class="chk"><input type="checkbox" id="showMin" onchange="render()"> 最安値も表示</label>
+      <span style="flex:1"></span>
+      <button class="btn btn-main" onclick="exportPng()">画像を保存</button>
+    </div>
+    <div id="status" class="status">「シートから読み込み」で現在の買取表を表示、または「検索」でBOXを探して追加できます。</div>
+  </div>
+
+  <div id="results"></div>
+
+  <div id="board">
+    <div class="head">
+      <div class="head-l">
+        <span class="tag">高価買取中</span>
+        <h1 class="title" contenteditable="true">ポケモンカードBOX買取表</h1>
+        <span class="shop" contenteditable="true">トレリス草加店</span>
+      </div>
+      <div class="head-r">
+        <span class="date" id="date" contenteditable="true"></span>
+      </div>
+    </div>
+
+    <div class="rows" id="rows">
+      <div class="empty">読み込みか検索でBOXを追加してください。</div>
+    </div>
+
+    <div class="foot">
+      <span class="note" contenteditable="true">表示価格は在庫状況に応じて変動する場合がございます。</span>
+      <span class="handle" contenteditable="true">@torelis_soka</span>
+    </div>
+  </div>
+
+<script>
+  var items = [];        // 買取表に載っている商品
+  var lastResults = [];  // 直近の検索結果
+
+  (function(){
+    var d = new Date();
+    document.getElementById('date').textContent =
+      d.getFullYear()+'.'+(d.getMonth()+1)+'.'+d.getDate()+' 更新';
+  })();
+
+  function apiUrl(){ return document.getElementById('api').value.trim(); }
+  function setStatus(msg, err){
+    var el = document.getElementById('status');
+    el.textContent = msg; el.className = 'status'+(err?' err':'');
+  }
+  function yen(n){ return Number(n).toLocaleString('ja-JP'); }
+  function isNum(v){ return typeof v==='number' || /^\d+$/.test(String(v).replace(/,/g,'')); }
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+  // ---- JSONP(GASはCORS不可のため <script> で読む) ----
+  function jsonp(base, params){
+    return new Promise(function(resolve, reject){
+      if(!base){ reject(new Error('URL未設定')); return; }
+      var cb = 'jsonp_' + Math.random().toString(36).slice(2);
+      var qs = [];
+      Object.keys(params||{}).forEach(function(k){
+        qs.push(encodeURIComponent(k)+'='+encodeURIComponent(params[k]));
+      });
+      qs.push('callback='+cb);
+      var url = base + (base.indexOf('?')>-1?'&':'?') + qs.join('&');
+      var s = document.createElement('script');
+      var t = setTimeout(function(){ cleanup(); reject(new Error('タイムアウト')); }, 25000);
+      window[cb] = function(data){ clearTimeout(t); cleanup(); resolve(data); };
+      s.onerror = function(){ clearTimeout(t); cleanup(); reject(new Error('通信エラー')); };
+      function cleanup(){ try{delete window[cb];}catch(e){window[cb]=undefined;} if(s.parentNode) s.parentNode.removeChild(s); }
+      s.src = url; document.body.appendChild(s);
+    });
+  }
+
+  // ---- シートから買取表を読み込み ----
+  function load(){
+    setStatus('読み込み中…');
+    jsonp(apiUrl(), {}).then(function(data){
+      items = (data.items||[]).filter(function(x){ return x.buy!=='' && x.buy!=null; });
+      setStatus(items.length ? items.length+'件を読み込みました。クリックで文字・価格を編集できます。'
+                             : 'シートが空でした。検索でBOXを追加してください。');
+      render();
+    }).catch(function(e){ setStatus('読み込み失敗: '+e.message, true); });
+  }
+
+  // ---- 検索 ----
+  function doSearch(){
+    var q = document.getElementById('q').value.trim();
+    if(!q){ setStatus('検索キーワードを入力してください。', true); return; }
+    setStatus('検索中…');
+    jsonp(apiUrl(), {action:'search', q:q}).then(function(data){
+      lastResults = data.items || [];
+      renderResults();
+      setStatus(lastResults.length ? lastResults.length+'件ヒット。「保存」でシートに追加(自動更新)、「一時追加」でこの画像だけに追加。'
+                                   : 'ヒットなし。キーワードを変えてみてください。', !lastResults.length);
+    }).catch(function(e){ setStatus('検索失敗: '+e.message, true); });
+  }
+
+  function renderResults(){
+    var el = document.getElementById('results');
+    el.innerHTML = lastResults.map(function(it, i){
+      var price = it.buy!=null ? '買取 ¥'+yen(it.buy) : '価格取得不可';
+      var min = it.min!=null ? ' <span class="rmin">(最安¥'+yen(it.min)+')</span>' : '';
+      return '<div class="rcard">'+
+        '<img src="'+it.img+'" alt="" loading="lazy">'+
+        '<div class="rname">'+esc(it.name)+'</div>'+
+        '<div class="rprice">'+price+min+'</div>'+
+        '<div class="rbtns">'+
+          '<button class="btn btn-sub" onclick="pick('+i+',0)">一時追加</button>'+
+          '<button class="btn btn-main" onclick="pick('+i+',1)">保存</button>'+
+        '</div></div>';
+    }).join('');
+  }
+
+  // act: 0=一時追加, 1=保存
+  function pick(i, act){
+    var it = lastResults[i];
+    if(!it) return;
+    if(items.some(function(x){ return String(x.id).indexOf(it.id)!==-1; })){
+      setStatus(it.name+' は既に表にあります。'); return;
+    }
+    if(act===0){
+      items.push({id:it.id, name:it.name, img:it.img, min:it.min, buy:it.buy});
+      render(); setStatus(it.name+' を一時追加しました。');
+    }else{
+      setStatus('保存中…');
+      jsonp(apiUrl(), {action:'add', id:it.id, name:it.name, img:it.img}).then(function(r){
+        if(r.status==='added'){
+          items.push({id:it.id, name:r.name, img:r.img, min:r.min, buy:r.buy});
+          render(); setStatus(it.name+' を保存しました（次回から自動更新されます）。');
+        }else if(r.status==='exists'){
+          setStatus(it.name+' は既にシートに登録済みです。');
+        }else{
+          setStatus('保存失敗: '+(r.error||'不明'), true);
+        }
+      }).catch(function(e){ setStatus('保存失敗: '+e.message, true); });
+    }
+  }
+
+  // ---- 買取表の描画 ----
+  function render(){
+    var wrap = document.getElementById('rows');
+    var showMin = document.getElementById('showMin').checked;
+    if(!items.length){ wrap.innerHTML = '<div class="empty">読み込みか検索でBOXを追加してください。</div>'; return; }
+    wrap.innerHTML = '';
+    items.forEach(function(it, i){
+      var bad = !isNum(it.buy);
+      var row = document.createElement('div');
+      row.className = 'item' + (bad?' bad':'');
+      var name = (it.name && String(it.name).trim()) ? it.name : ('商品 '+it.id);
+      var thumb = it.img
+        ? '<img class="thumb" data-cdn="'+esc(it.img)+'" src="'+esc(it.img)+'" alt="" crossorigin="anonymous">'
+        : '<span class="thumb noimg"></span>';
+      var minTxt = (showMin && isNum(it.min))
+        ? '<span style="color:var(--muted);font-size:20px;font-weight:700;margin-right:12px">最安 ¥'+yen(it.min)+'</span>' : '';
+      var priceHtml = bad
+        ? '<span class="price">取得失敗</span>'
+        : minTxt + '<span class="price"><span class="yen">¥</span>'+yen(it.buy)+'</span>';
+      row.innerHTML =
+        '<button class="rm" title="消す" onclick="removeRow('+i+')">×</button>' +
+        thumb +
+        '<span class="name" contenteditable="true">'+esc(name)+'</span>' +
+        priceHtml;
+      wrap.appendChild(row);
+    });
+  }
+  function removeRow(i){ items.splice(i,1); render(); }
+
+  async function fontsReady(){
+    try{
+      await Promise.all([
+        document.fonts.load('900 52px "Noto Sans JP"'),
+        document.fonts.load('700 34px "Noto Sans JP"'),
+        document.fonts.load('400 19px "Noto Sans JP"')
+      ]);
+      await document.fonts.ready;
+    }catch(e){}
+  }
+
+  // ---- 画像を保存(PNG) ----
+  async function exportPng(){
+    if(!items.length){ setStatus('先にBOXを追加してください。', true); return; }
+    setStatus('画像を生成中…（画像を変換しています）');
+    document.body.classList.add('exporting');
+    try{
+      // 商品画像をbase64化(cdnは別ドメインなので直だとPNGに焼けないため)
+      var imgEls = document.querySelectorAll('#rows img.thumb');
+      await Promise.all(Array.prototype.map.call(imgEls, function(el){
+        var cdn = el.getAttribute('data-cdn');
+        if(!cdn) return Promise.resolve();
+        return jsonp(apiUrl(), {action:'img', url:cdn})
+          .then(function(r){ if(r && r.dataUri){ el.removeAttribute('crossorigin'); el.src = r.dataUri; } })
+          .catch(function(){});
+      }));
+      await fontsReady();
+
+      var board = document.getElementById('board');
+      var canvas = await html2canvas(board, {scale:2, backgroundColor:'#0E1B33', useCORS:true, logging:false});
+      var d = new Date();
+      var stamp = ''+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+      var a = document.createElement('a');
+      a.download = 'kaitori_'+stamp+'.png';
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+      setStatus('画像を保存しました。Xに貼れます。');
+    }catch(e){
+      setStatus('画像生成に失敗: '+e.message, true);
+    }finally{
+      document.body.classList.remove('exporting');
+    }
+  }
+</script>
+</body>
+</html>
