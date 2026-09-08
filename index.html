@@ -194,7 +194,7 @@
       var price = it.buy!=null ? '買取 ¥'+yen(it.buy) : '価格取得不可';
       var min = it.min!=null ? ' <span class="rmin">(最安¥'+yen(it.min)+')</span>' : '';
       return '<div class="rcard">'+
-        '<img src="'+it.img+'" alt="" loading="lazy">'+
+        (it.src?'<img src="'+it.src+'" alt="">':'<div style="height:100px;background:#0E1B33;border-radius:6px"></div>')+
         '<div class="rname">'+esc(it.name)+'</div>'+
         '<div class="rprice">'+price+min+'</div>'+
         '<div class="rbtns">'+
@@ -212,13 +212,13 @@
       setStatus(it.name+' は既に表にあります。'); return;
     }
     if(act===0){
-      items.push({id:it.id, name:it.name, img:it.img, min:it.min, buy:it.buy});
+      items.push({id:it.id, name:it.name, img:it.img, src:it.src, min:it.min, buy:it.buy});
       render(); setStatus(it.name+' を一時追加しました。');
     }else{
       setStatus('保存中…');
       jsonp(apiUrl(), {action:'add', id:it.id, name:it.name, img:it.img}).then(function(r){
         if(r.status==='added'){
-          items.push({id:it.id, name:r.name, img:r.img, min:r.min, buy:r.buy});
+          items.push({id:it.id, name:r.name, img:r.img, src:r.src, min:r.min, buy:r.buy});
           render(); setStatus(it.name+' を保存しました（次回から自動更新されます）。');
         }else if(r.status==='exists'){
           setStatus(it.name+' は既にシートに登録済みです。');
@@ -240,8 +240,8 @@
       var row = document.createElement('div');
       row.className = 'item' + (bad?' bad':'');
       var name = (it.name && String(it.name).trim()) ? it.name : ('商品 '+it.id);
-      var thumb = it.img
-        ? '<img class="thumb" data-cdn="'+esc(it.img)+'" src="'+esc(it.img)+'" alt="" crossorigin="anonymous">'
+      var thumb = it.src
+        ? '<img class="thumb" src="'+it.src+'" alt="">'
         : '<span class="thumb noimg"></span>';
       var minTxt = (showMin && isNum(it.min))
         ? '<span style="color:var(--muted);font-size:20px;font-weight:700;margin-right:12px">最安 ¥'+yen(it.min)+'</span>' : '';
@@ -272,18 +272,9 @@
   // ---- 画像を保存(PNG) ----
   async function exportPng(){
     if(!items.length){ setStatus('先にBOXを追加してください。', true); return; }
-    setStatus('画像を生成中…（画像を変換しています）');
+    setStatus('画像を生成中…');
     document.body.classList.add('exporting');
     try{
-      // 商品画像をbase64化(cdnは別ドメインなので直だとPNGに焼けないため)
-      var imgEls = document.querySelectorAll('#rows img.thumb');
-      await Promise.all(Array.prototype.map.call(imgEls, function(el){
-        var cdn = el.getAttribute('data-cdn');
-        if(!cdn) return Promise.resolve();
-        return jsonp(apiUrl(), {action:'img', url:cdn})
-          .then(function(r){ if(r && r.dataUri){ el.removeAttribute('crossorigin'); el.src = r.dataUri; } })
-          .catch(function(){});
-      }));
       await fontsReady();
 
       var board = document.getElementById('board');
