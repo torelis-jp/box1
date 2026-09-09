@@ -196,6 +196,7 @@
       <button class="btn btn-sub" onclick="bgReset()">既定に戻す</button>
       <label class="chk"><input type="checkbox" id="showMin" onchange="render()"> 最安値も表示</label>
       <span style="flex:1"></span>
+      <button class="btn btn-sub" onclick="copyForX()">Xポスト用にコピー</button>
       <button class="btn btn-main" onclick="exportPng()">画像を保存</button>
     </div>
     <div id="status" class="status">「シートから読み込み」または「検索」でBOXを追加。カード上部の⠿を掴むと並べ替えできます。</div>
@@ -456,6 +457,25 @@
       document.fonts.load('400 18px "Noto Sans JP"')
     ]); await document.fonts.ready; }catch(e){}
   }
+  function copyForX(){
+    if(!items.length){ setStatus('先にBOXを追加してください。',true); return; }
+    var lines=items.slice(0,MAX).map(function(x){
+      var nm=(x.name||'').trim();
+      var price=isNum(x.buy)?('¥'+yen(x.buy)):'';
+      return nm + (price?(' '+price):'');
+    });
+    var text=lines.join('\n');
+    function done(){ setStatus('X用テキストをコピーしました（'+lines.length+'件）。'); }
+    function fallback(){
+      var ta=document.createElement('textarea'); ta.value=text; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      try{ document.execCommand('copy'); done(); }catch(e){ setStatus('コピー失敗。手動で選択してください。',true); }
+      document.body.removeChild(ta);
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(text).then(done).catch(fallback); }
+    else fallback();
+  }
+
   async function exportPng(){
     if(!items.length){ setStatus('先にBOXを追加してください。',true); return; }
     setStatus('画像を生成中…');
