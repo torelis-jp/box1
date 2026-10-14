@@ -169,6 +169,17 @@
   .g1 .imgbox{height:470px !important} .g2 .imgbox{height:452px !important} .g3 .imgbox{height:410px !important}
   .g4 .imgbox{height:322px !important} .g5 .imgbox{height:232px !important} .g6 .imgbox{height:178px !important}
   .g7 .imgbox{height:140px !important} .g8 .imgbox{height:138px !important} .g9 .imgbox{height:130px !important}
+
+  /* ==== v6: BOX背景を透過して大きく / 買取金額をさらに大きく ==== */
+  .imgbox{ background:transparent !important; }
+  .imgbox img{ filter:drop-shadow(0 3px 9px rgba(0,0,0,.5)); }
+  .g1 .imgbox{height:520px !important} .g2 .imgbox{height:496px !important} .g3 .imgbox{height:456px !important}
+  .g4 .imgbox{height:346px !important} .g5 .imgbox{height:244px !important} .g6 .imgbox{height:186px !important}
+  .g7 .imgbox{height:146px !important} .g8 .imgbox{height:140px !important} .g9 .imgbox{height:132px !important}
+  .g1 .pr{font-size:50px} .g2 .pr{font-size:46px} .g3 .pr{font-size:42px}
+  .g4 .pr{font-size:34px} .g5 .pr{font-size:28px} .g6 .pr{font-size:24px}
+  .g7 .pr{font-size:20px} .g8 .pr{font-size:18px} .g9 .pr{font-size:16px}
+  .pr{ padding:3px 16px !important; }
 </style>
 </head>
 <body>
@@ -332,6 +343,47 @@
     }
   }
 
+  /* ---- BOX画像の背景を透過して切り抜き(余白を除いて大きく見せる) ---- */
+  var cutoutCache=Object.create(null);
+  function cutoutBox(img){
+    if(!img || img.dataset.cutoutDone || !img.complete || !img.naturalWidth) return;
+    var src=img.currentSrc||img.src;
+    if(Object.prototype.hasOwnProperty.call(cutoutCache,src)){ img.dataset.cutoutDone='1'; if(cutoutCache[src]) img.src=cutoutCache[src]; return; }
+    if(src.indexOf('data:image/')!==0) return;
+    try{
+      var scale=Math.min(1,1100/Math.max(img.naturalWidth,img.naturalHeight));
+      var w=Math.max(1,Math.round(img.naturalWidth*scale)), h=Math.max(1,Math.round(img.naturalHeight*scale));
+      var c=document.createElement('canvas'); c.width=w; c.height=h;
+      var cx=c.getContext('2d',{willReadFrequently:true}); cx.drawImage(img,0,0,w,h);
+      var im=cx.getImageData(0,0,w,h), d=im.data, r=Math.max(2,Math.round(Math.min(w,h)*.02));
+      function med(a){ a.sort(function(x,y){return x-y}); return a[a.length>>1]||0; }
+      function corner(rx,ry){ var rr=[],gg=[],bb=[],tot=0,al=0; for(var yy=0;yy<r;yy++)for(var xx=0;xx<r;xx++){ var x=rx?w-1-xx:xx, y=ry?h-1-yy:yy, k=(y*w+x)*4; tot++; if(d[k+3]>8){ rr.push(d[k]); gg.push(d[k+1]); bb.push(d[k+2]); } else al++; } return {col:[med(rr),med(gg),med(bb)], transp: al>tot*0.6}; }
+      var cc=[corner(0,0),corner(1,0),corner(0,1),corner(1,1)];
+      var transpCorners=cc.filter(function(o){return o.transp;}).length;
+      var bg=null;
+      if(transpCorners<4){
+        var cs=cc.map(function(o){return o.col;});
+        for(var a=0;a<4&&!bg;a++){ var near=[]; for(var b=0;b<4;b++){ var dr=cs[a][0]-cs[b][0],dg=cs[a][1]-cs[b][1],db=cs[a][2]-cs[b][2]; if(dr*dr+dg*dg+db*db<80*80) near.push(cs[b]); } if(near.length>=3) bg=[0,1,2].map(function(j){return Math.round(near.reduce(function(t,v){return t+v[j]},0)/near.length);}); }
+      }
+      var n=w*h, seen=new Uint8Array(n), stack=new Int32Array(n), sp=0, th=66*66;
+      function push(i){ if(i<0||i>=n||seen[i]) return; var k=i*4; if(d[k+3]<=10){ seen[i]=1; stack[sp++]=i; return; } if(bg){ var dr=d[k]-bg[0],dg=d[k+1]-bg[1],db=d[k+2]-bg[2]; if(dr*dr+dg*dg+db*db<=th){ seen[i]=1; stack[sp++]=i; } } }
+      for(var x=0;x<w;x++){ push(x); push((h-1)*w+x); }
+      for(var y=1;y<h-1;y++){ push(y*w); push(y*w+w-1); }
+      while(sp){ var i=stack[--sp], x=i%w, y=(i/w)|0; if(x)push(i-1); if(x<w-1)push(i+1); if(y)push(i-w); if(y<h-1)push(i+w); }
+      var minX=w,minY=h,maxX=-1,maxY=-1;
+      for(var y=0;y<h;y++)for(var x=0;x<w;x++){ var i=y*w+x,k=i*4; if(!seen[i]&&d[k+3]>8){ if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; } else { d[k+3]=0; } }
+      if(maxX<0){ cutoutCache[src]=null; img.dataset.cutoutDone='1'; return; }
+      var pad=Math.round(Math.min(w,h)*0.012);
+      minX=Math.max(0,minX-pad); minY=Math.max(0,minY-pad); maxX=Math.min(w-1,maxX+pad); maxY=Math.min(h-1,maxY+pad);
+      var cw=maxX-minX+1, ch=maxY-minY+1;
+      cx.putImageData(im,0,0);
+      var out=document.createElement('canvas'); out.width=cw; out.height=ch;
+      out.getContext('2d').putImageData(cx.getImageData(minX,minY,cw,ch),0,0);
+      var result=out.toDataURL('image/png');
+      cutoutCache[src]=result; img.dataset.cutoutDone='1'; img.src=result;
+    }catch(e){ cutoutCache[src]=null; img.dataset.cutoutDone='1'; }
+  }
+
   function render(){
     var wrap=document.getElementById('rows');
     var showMin=document.getElementById('showMin').checked;
@@ -341,7 +393,7 @@
     wrap.innerHTML='';
     list.forEach(function(it,i){
       var bad=!isNum(it.buy);
-      var thumb=it.src? '<img src="'+it.src+'" alt="" onerror="imgErr(this)">' : '<div class="noimg"></div>';
+      var thumb=it.src? '<img src="'+it.src+'" alt="" onload="cutoutBox(this)" onerror="imgErr(this)">' : '<div class="noimg"></div>';
       var mn=(showMin&&isNum(it.min))? '<span class="mn">最安 ¥'+yen(it.min)+'</span>':'';
       var pr=bad? '<div class="pr">取得失敗</div>' : '<div class="pr"><span class="y">¥</span>'+yen(it.buy)+'</div>'+mn;
       var cell=document.createElement('div');
@@ -460,9 +512,8 @@
   function copyForX(){
     if(!items.length){ setStatus('先にBOXを追加してください。',true); return; }
     var lines=items.slice(0,MAX).map(function(x){
-      var nm=(x.name||'').trim();
-      var price=isNum(x.buy)?('¥'+yen(x.buy)):'';
-      return nm + (price?(' '+price):'');
+      var nm=dispName(x).trim().replace(/^[「『\s]+/,'').replace(/[」』\s]+$/,'');
+      return '「'+nm+'」';
     });
     var text=lines.join('\n');
     function done(){ setStatus('X用テキストをコピーしました（'+lines.length+'件）。'); }
